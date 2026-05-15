@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Optional
 
 
-BASE_URL = os.environ.get("NEW_API_BASE_URL", "https://ai.dtony.org")
-ACCOUNTS_FILE = os.environ.get("ACCOUNTS_FILE", "DTony API.txt")
+BASE_URL = os.environ.get("NEW_API_BASE_URL") or "https://ai.dtony.org"
+ACCOUNTS_FILE = os.environ.get("ACCOUNTS_FILE") or "DTony API.txt"
 REQUEST_TIMEOUT = 15
 REQUEST_DELAY = 1.5
 
