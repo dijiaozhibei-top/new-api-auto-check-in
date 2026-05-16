@@ -13,7 +13,6 @@ BATCH_INDEX = int(os.environ.get("BATCH_INDEX") or "0")
 TIMEOUT = (3, 5)
 DELAY = 3
 
-
 def fmt_q(n):
     if n is None:
         return ""
@@ -54,7 +53,7 @@ def post_json(session, url, data, headers=None):
     h = {
         "User-Agent": UA,
         "Accept": "application/json",
-        **({"Content-Type": "application/json"} if isinstance(data, dict) else {}),
+        **({BContent-Type": "application/json"} if isinstance(data, dict) else {}),
     }
     if headers:
         h.update(headers)
@@ -239,7 +238,7 @@ def main():
             )
             success_count += 1
         elif status == "already_checked_in":
-            q = f"，当前 {fmt_q(quota_after)}" if quota_after else ""
+            q = f",，当前 {fmt_q(quota_after)}" if quota_after else ""
             print(f"  [SKIP] [{idx}/{total}] {username}: 今日已签到{q}")
             already_checked += 1
         else:
