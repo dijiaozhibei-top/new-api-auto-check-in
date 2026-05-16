@@ -31,7 +31,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: checkin-report-${{ matrix.batch }}
-          path: checkin_result.html
+          path: checkin_report_${{ matrix.batch }}.html
           overwrite: true
 
   summary:
