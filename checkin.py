@@ -303,6 +303,10 @@ def main():
             detail = r.get("msg", "")
         rows += f"<tr><td>{u}</td><td>{badge}</td><td>{detail}</td></tr>\n"
 
+    api_key_rows = "".join(
+        f'<tr><td>{n}</td><td style="font-family:monospace">{k}</td></tr>{chr(10)}'
+        for n, k in api_keys
+    )
     html = f"""<!DOCTYPE html>
 <html lang="zh">
 <head><meta charset="utf-8"><title>New API 签到报告</title></head>
@@ -325,7 +329,7 @@ def main():
 <table style="width:100%;border-collapse:collapse;font-size:13px;word-break:break-all">
 <thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
 <tbody>
-{"".join(f'<tr><td>{n}</td><td style="font-family:monospace">{k}</td></tr>\n' for n, k in api_keys)}
+{api_key_rows}
 </tbody>
 </table>
 </div></body></html>"""
