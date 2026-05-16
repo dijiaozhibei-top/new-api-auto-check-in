@@ -4,13 +4,16 @@ import json
 import time
 import requests
 from datetime import datetime
-from typing import Optional
 
 
 BASE_URL = os.environ.get("NEW_API_BASE_URL") or "https://ai.dtony.org"
 ACCOUNTS_FILE = os.environ.get("ACCOUNTS_FILE") or "DTony API.txt"
-REQUEST_TIMEOUT = 15
-REQUEST_DELAY = 1.5
+BATCH_TOTAL = int(os.environ.get("BATCH_TOTAL") or "1")
+BATCH_INDEX = int(os.environ.get("BATCH_INDEX") or "0")
+TIMEOUT = (3, 5)
+DELAY = 3
+
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
 def read_accounts(file_path: str) -> list[str]:
@@ -23,7 +26,6 @@ def read_accounts(file_path: str) -> list[str]:
                 continue
             accounts.append(line.split(None, 1)[-1].strip())
         return accounts
-
     accounts = []
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -41,148 +43,211 @@ def read_accounts(file_path: str) -> list[str]:
     return accounts
 
 
-def login(session: requests.Session, username: str, password: str) -> Optional[int]:
-    try:
-        resp = session.post(
-            f"{BASE_URL}/api/user/login",
-            json={"username": username, "password": password},
-            headers={"Content-Type": "application/json"},
-            timeout=REQUEST_TIMEOUT,
-        )
-        if resp.status_code == 429:
-            print(f"    [WARN] 请求过于频繁，等待 30 秒后重试...")
-            time.sleep(30)
-            return login(session, username, password)
-        data = resp.json()
-        if data.get("success") and data.get("data", {}).get("id"):
-            return data["data"]["id"]
-        return None
-    except requests.RequestException:
-        return None
+def post_json(session, url, data, headers=None):
+    h = {
+        "User-Agent": UA,
+        "Accept": "application/json",
+        **({"Content-Type": "application/json"} if isinstance(data, dict) else {}),
+    }
+    if headers:
+        h.update(headers)
+    return session.post(
+        url,
+        json=data if isinstance(data, dict) else None,
+        data=data if isinstance(data, str) else None,
+        headers=h,
+        timeout=TIMEOUT,
+    )
 
 
-def has_checked_in(session: requests.Session, user_id: int) -> bool:
-    try:
-        month = datetime.now().strftime("%Y-%m")
-        resp = session.get(
-            f"{BASE_URL}/api/user/checkin?month={month}",
-            headers={"New-API-User": str(user_id)},
-            timeout=REQUEST_TIMEOUT,
-        )
-        if resp.status_code == 429:
-            print(f"    [WARN] 请求过于频繁，等待 30 秒后重试...")
-            time.sleep(30)
-            return has_checked_in(session, user_id)
-        data = resp.json()
-        if data.get("success"):
-            stats = data.get("data", {}).get("stats", {})
-            return stats.get("checked_in_today", False)
-        return False
-    except requests.RequestException:
-        return False
-
-
-def do_checkin(session: requests.Session, user_id: int) -> Optional[int]:
-    try:
-        resp = session.post(
-            f"{BASE_URL}/api/user/checkin",
-            headers={
-                "New-API-User": str(user_id),
-                "Content-Type": "application/json",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        if resp.status_code == 429:
-            print(f"    [WARN] 请求过于频繁，等待 30 秒后重试...")
-            time.sleep(30)
-            return do_checkin(session, user_id)
-        data = resp.json()
-        if data.get("success"):
-            return data.get("data", {}).get("quota_awarded", 0)
-        return None
-    except requests.RequestException:
-        return None
+def get_json(session, url, headers=None):
+    h = {"User-Agent": UA, "Accept": "application/json"}
+    if headers:
+        h.update(headers)
+    return session.get(url, headers=h, timeout=TIMEOUT)
 
 
 def main():
     print("=" * 60)
-    print(f"New API 自动签到工具")
+    print("New API 自动签到工具")
     print(f"站点: {BASE_URL}")
     print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
     accounts = read_accounts(ACCOUNTS_FILE)
     if not accounts:
-        print("[ERROR] 未读取到任何账号，请检查账号文件")
+        print("[ERROR] 未读取到任何账号")
         sys.exit(1)
+
+    if BATCH_TOTAL > 1:
+        batch_size = (len(accounts) + BATCH_TOTAL - 1) // BATCH_TOTAL
+        start = BATCH_INDEX * batch_size
+        end = min(start + batch_size, len(accounts))
+        accounts = accounts[start:end]
+        print(f"批次 {BATCH_INDEX + 1}/{BATCH_TOTAL}，处理账号 {start + 1}-{end}\n")
 
     print(f"共读取到 {len(accounts)} 个账号\n")
 
+    session = requests.Session()
+    results = []
     success_count = 0
     fail_count = 0
     already_checked = 0
-    results = []
+    total = len(accounts)
 
     for idx, username in enumerate(accounts, 1):
-        password = username
-        print(f"[{idx}/{len(accounts)}] 正在处理: {username}")
+        status = "login_failed"
+        msg = ""
+        awarded = None
+        quota_after = None
 
-        session = requests.Session()
-        user_id = login(session, username, password)
-        if user_id is None:
-            fail_count += 1
-            results.append({"username": username, "status": "login_failed"})
-            print(f"    [FAIL] 账号不可用（登录失败）")
-            time.sleep(REQUEST_DELAY)
-            continue
-
-        if has_checked_in(session, user_id):
-            print(f"    [SKIP] 今日已签到，跳过")
-            already_checked += 1
-            results.append({"username": username, "status": "already_checked_in"})
-            time.sleep(REQUEST_DELAY)
-            continue
-
-        awarded = do_checkin(session, user_id)
-        if awarded is not None:
-            print(f"    [OK]   签到成功 +{awarded} 额度")
-            success_count += 1
-            results.append(
-                {"username": username, "status": "success", "quota_awarded": awarded}
+        try:
+            resp = post_json(
+                session,
+                f"{BASE_URL}/api/user/login",
+                {"username": username, "password": username},
             )
-        else:
-            fail_count += 1
-            results.append({"username": username, "status": "checkin_failed"})
-            print(f"    [FAIL] 签到失败")
-        time.sleep(REQUEST_DELAY)
+            if resp.status_code == 429:
+                print(
+                    f"  [STOP] [{idx}/{total}] {username}: 达到每日登录上限（429），跳过剩下的账号"
+                )
+                remaining = total - idx + 1
+                fail_count += remaining
+                for i in range(remaining):
+                    rest_name = accounts[idx - 1 + i]
+                    results.append(
+                        {
+                            "username": rest_name,
+                            "status": "rate_limited",
+                            "msg": "每日登录上限 429",
+                        }
+                    )
+                break
+            data = resp.json() if resp.text.strip() else {}
+            if data.get("success") and data.get("data", {}).get("id"):
+                uid = data["data"]["id"]
 
-    print("\n" + "=" * 60)
-    print(f"签到完成！结果统计:")
+                month = datetime.now().strftime("%Y-%m")
+                resp2 = get_json(
+                    session,
+                    f"{BASE_URL}/api/user/checkin?month={month}",
+                    {"New-API-User": str(uid)},
+                )
+                d2 = resp2.json() if resp2.text.strip() else {}
+                if d2.get("success") and d2.get("data", {}).get("stats", {}).get(
+                    "checked_in_today", False
+                ):
+                    status = "already_checked_in"
+                    r3 = get_json(
+                        session, f"{BASE_URL}/api/user/self", {"New-API-User": str(uid)}
+                    )
+                    d3 = r3.json() if r3.text.strip() else {}
+                    if d3.get("success"):
+                        quota_after = d3["data"].get("quota", 0)
+                else:
+                    resp4 = post_json(
+                        session,
+                        f"{BASE_URL}/api/user/checkin",
+                        "",
+                        {"New-API-User": str(uid)},
+                    )
+                    d4 = resp4.json() if resp4.text.strip() else {}
+                    if d4.get("success"):
+                        awarded = d4.get("data", {}).get("quota_awarded", 0)
+                        status = "success"
+                        r5 = get_json(
+                            session,
+                            f"{BASE_URL}/api/user/self",
+                            {"New-API-User": str(uid)},
+                        )
+                        d5 = r5.json() if r5.text.strip() else {}
+                        if d5.get("success"):
+                            quota_after = d5["data"].get("quota", 0)
+                    else:
+                        msg = d4.get("message", "") or f"HTTP {resp4.status_code}"
+                        status = "checkin_failed"
+            else:
+                status_code = resp.status_code
+                msg = data.get("message", "") or (
+                    f"HTTP {status_code}"
+                    if status_code != 200
+                    else f"响应: {resp.text[:100]}"
+                )
+        except Exception as e:
+            msg = f"{type(e).__name__}: {str(e)[:80]}"
+
+        result = {"username": username, "status": status, "msg": msg}
+        if awarded is not None:
+            result["awarded"] = awarded
+        if quota_after is not None:
+            result["quota"] = quota_after
+        results.append(result)
+
+        time.sleep(DELAY)
+
+        if status == "success":
+            print(
+                f"  [OK]   [{idx}/{total}] {username}: 签到成功 +{awarded}，当前 {quota_after}"
+            )
+            success_count += 1
+        elif status == "already_checked_in":
+            q = f"，当前 {quota_after}" if quota_after else ""
+            print(f"  [SKIP] [{idx}/{total}] {username}: 今日已签到{q}")
+            already_checked += 1
+        else:
+            print(f"  [FAIL] [{idx}/{total}] {username}: {msg}")
+            fail_count += 1
+
+    print(f"\n{'=' * 60}")
+    print(f"签到完成！")
     print(f"  成功签到: {success_count}")
     print(f"  今日已签到: {already_checked}")
     print(f"  失败: {fail_count}")
-    print(f"  总计: {len(accounts)}")
-    print("=" * 60)
+    print(f"  总计: {total}")
+    print(f"{'=' * 60}")
 
-    summary_path = "checkin_result.json"
-    with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "time": datetime.now().isoformat(),
-                "total": len(accounts),
-                "success": success_count,
-                "already_checked_in": already_checked,
-                "failed": fail_count,
-                "results": results,
-            },
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
-    print(f"详细结果已保存至: {summary_path}")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    rows = ""
+    for r in results:
+        u, st = r["username"], r["status"]
+        if st == "success":
+            badge = '<span style="background:#22c55e;color:white;padding:2px 8px;border-radius:4px;font-size:12px">成功</span>'
+            detail = f"签到 +{r['awarded']}，当前 {r['quota']}"
+        elif st == "already_checked_in":
+            badge = '<span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:12px">已签到</span>'
+            detail = f"当前额度 {r['quota']}" if r.get("quota") else ""
+        elif st == "rate_limited":
+            badge = '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:12px">限流跳过</span>'
+            detail = r.get("msg", "")
+        else:
+            badge = '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:4px;font-size:12px">失败</span>'
+            detail = r.get("msg", "")
+        rows += f"<tr><td>{u}</td><td>{badge}</td><td>{detail}</td></tr>\n"
 
-    if fail_count > 0:
-        sys.exit(1)
+    html = f"""<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>New API 签到报告</title></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;margin:20px">
+<div style="max-width:800px;margin:auto;background:white;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+<h2 style="margin-top:0">New API 自动签到报告</h2>
+<p style="color:#666;font-size:14px">站点: {BASE_URL} | 时间: {now}</p>
+<div style="display:flex;gap:16px;margin:20px 0">
+  <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#16a34a">{success_count}</div><div style="font-size:12px;color:#666">签到成功</div></div>
+  <div style="flex:1;background:#eff6ff;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#2563eb">{already_checked}</div><div style="font-size:12px;color:#666">今日已签到</div></div>
+  <div style="flex:1;background:#fef2f2;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#dc2626">{fail_count}</div><div style="font-size:12px;color:#666">失败</div></div>
+  <div style="flex:1;background:#fafafa;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#525252">{total}</div><div style="font-size:12px;color:#666">总计</div></div>
+</div>
+<table style="width:100%;border-collapse:collapse;font-size:13px">
+<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">状态</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">详情</th></tr></thead>
+<tbody>{rows}</tbody>
+</table>
+</div></body></html>"""
+
+    with open("checkin_result.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    print("详细报告已保存至: checkin_result.html")
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":
