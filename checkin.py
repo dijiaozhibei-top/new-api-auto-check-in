@@ -13,6 +13,13 @@ BATCH_INDEX = int(os.environ.get("BATCH_INDEX") or "0")
 TIMEOUT = (3, 5)
 DELAY = 3
 
+
+def fmt_q(n):
+    if n is None:
+        return ""
+    return f"{n / 100:.2f}"
+
+
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
@@ -187,11 +194,11 @@ def main():
 
         if status == "success":
             print(
-                f"  [OK]   [{idx}/{total}] {username}: 签到成功 +{awarded}，当前 {quota_after}"
+                f"  [OK]   [{idx}/{total}] {username}: 签到成功 +{fmt_q(awarded)}，当前 {fmt_q(quota_after)}"
             )
             success_count += 1
         elif status == "already_checked_in":
-            q = f"，当前 {quota_after}" if quota_after else ""
+            q = f"，当前 {fmt_q(quota_after)}" if quota_after else ""
             print(f"  [SKIP] [{idx}/{total}] {username}: 今日已签到{q}")
             already_checked += 1
         else:
@@ -212,10 +219,10 @@ def main():
         u, st = r["username"], r["status"]
         if st == "success":
             badge = '<span style="background:#22c55e;color:white;padding:2px 8px;border-radius:4px;font-size:12px">成功</span>'
-            detail = f"签到 +{r['awarded']}，当前 {r['quota']}"
+            detail = f"签到 +{fmt_q(r['awarded'])}，当前 {fmt_q(r['quota'])}"
         elif st == "already_checked_in":
             badge = '<span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:12px">已签到</span>'
-            detail = f"当前额度 {r['quota']}" if r.get("quota") else ""
+            detail = f"当前额度 {fmt_q(r['quota'])}" if r.get("quota") else ""
         elif st == "rate_limited":
             badge = '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:12px">限流跳过</span>'
             detail = r.get("msg", "")
