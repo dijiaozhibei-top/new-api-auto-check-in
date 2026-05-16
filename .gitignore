@@ -1,6 +1,11 @@
 __pycache__/
 *.py[cod]
 .env
+DTony API.txt
 checkin_result.json
 checkin_result.html
+checkin_summary.html
+checkin_b64.txt
+workflow_b64.txt
+api_keys_*.txt
 .ruff_cache/
