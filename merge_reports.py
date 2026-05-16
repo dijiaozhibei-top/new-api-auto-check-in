@@ -14,7 +14,7 @@ for fname in files:
     content = open(fname, "r", encoding="utf-8").read()
     rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
     for row in rows:
-        cols = re.findall(r"<td>(.*?)</td>", row)
+        cols = re.findall(r"<td[^>]*>(.*?)</td>", row)
         if len(cols) >= 3:
             username, badge, detail = cols[0], cols[1], cols[2]
             all_rows += (
@@ -89,7 +89,7 @@ if step_summary:
         content = open(fname, "r", encoding="utf-8").read()
         rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
         for row in rows:
-            cols = re.findall(r"<td>(.*?)</td>", row)
+            cols = re.findall(r"<td[^>]*>(.*?)</td>", row)
             if len(cols) >= 3:
                 username, badge_html, detail = cols[0], cols[1], cols[2]
                 if "22c55e" in badge_html:
@@ -105,7 +105,7 @@ if step_summary:
         content = open(fname, "r", encoding="utf-8").read()
         rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
         for row in rows:
-            cols = re.findall(r"<td>(.*?)</td>", row)
+            cols = re.findall(r"<td[^>]*>(.*?)</td>", row)
             if len(cols) == 2:
                 username, apikey = cols[0], cols[1]
                 apikey_clean = re.sub(r"<[^>]+>", "", apikey)
