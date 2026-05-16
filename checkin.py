@@ -74,6 +74,37 @@ def get_json(session, url, headers=None):
     return session.get(url, headers=h, timeout=TIMEOUT)
 
 
+def get_or_create_api_key(session, uid, username):
+    headers = {"New-API-User": str(uid)}
+    try:
+        r = session.get(f"{BASE_URL}/api/token/", headers=headers, timeout=TIMEOUT)
+        data = r.json() if r.text.strip() else {}
+        if data.get("success"):
+            for item in data.get("data", {}).get("items", []):
+                if item.get("name") == username:
+                    return item["key"]
+        r2 = session.post(
+            f"{BASE_URL}/api/token/",
+            json={
+                "name": username,
+                "unlimited_quota": True,
+                "remain_quota": 0,
+                "expired_time": -1,
+            },
+            headers={**headers, "Content-Type": "application/json"},
+            timeout=TIMEOUT,
+        )
+        if r2.json().get("success"):
+            r3 = session.get(f"{BASE_URL}/api/token/", headers=headers, timeout=TIMEOUT)
+            d3 = r3.json() if r3.text.strip() else {}
+            for item in d3.get("data", {}).get("items", []):
+                if item.get("name") == username:
+                    return item["key"]
+    except Exception:
+        pass
+    return None
+
+
 def main():
     print("=" * 60)
     print("New API 自动签到工具")
@@ -107,6 +138,8 @@ def main():
         msg = ""
         awarded = None
         quota_after = None
+        api_key = None
+        uid = None
 
         try:
             resp = post_json(
@@ -183,7 +216,15 @@ def main():
         except Exception as e:
             msg = f"{type(e).__name__}: {str(e)[:80]}"
 
-        result = {"username": username, "status": status, "msg": msg}
+        if uid:
+            api_key = get_or_create_api_key(session, uid, username)
+
+        result = {
+            "username": username,
+            "status": status,
+            "msg": msg,
+            "api_key": api_key,
+        }
         if awarded is not None:
             result["awarded"] = awarded
         if quota_after is not None:
@@ -212,6 +253,14 @@ def main():
     print(f"  失败: {fail_count}")
     print(f"  总计: {total}")
     print(f"{'=' * 60}")
+
+    api_keys = [(r["username"], r["api_key"]) for r in results if r.get("api_key")]
+    if api_keys:
+        apifile = f"api_keys_{BATCH_INDEX}.txt"
+        with open(apifile, "w", encoding="utf-8") as f:
+            for name, key in api_keys:
+                f.write(f"{name},{key}\n")
+        print(f"API Key 已保存至 {apifile}，共 {len(api_keys)} 个")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rows = ""
