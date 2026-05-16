@@ -55,4 +55,41 @@ html = f"""<!DOCTYPE html>
 
 with open("checkin_summary.html", "w", encoding="utf-8") as f:
     f.write(html)
-print(f"Summary: {SUCCESS} success, {SKIPPED} skipped, {FAILED} failed, total {TOTAL}")
+
+# ── text summary to stdout ──
+print(f"\n{'=' * 60}")
+print("汇总报告")
+print(f"  成功: {SUCCESS}  已签到: {SKIPPED}  失败: {FAILED}  总计: {TOTAL}")
+print(f"  时间: {now}")
+print(f"{'=' * 60}")
+
+# ── markdown to GITHUB_STEP_SUMMARY ──
+step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+if step_summary:
+    md = f"""## New API 签到汇总报告
+
+| 成功 | 已签到 | 失败 | 总计 |
+|------|--------|------|------|
+| {SUCCESS} | {SKIPPED} | {FAILED} | {TOTAL} |
+
+| 账号 | 状态 | 详情 |
+|------|------|------|
+"""
+    for fname in files:
+        content = open(fname, "r", encoding="utf-8").read()
+        rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
+        for row in rows:
+            cols = re.findall(r"<td>(.*?)</td>", row)
+            if len(cols) >= 3:
+                username, badge_html, detail = cols[0], cols[1], cols[2]
+                if "22c55e" in badge_html:
+                    status_text = "✅ 成功"
+                elif "3b82f6" in badge_html:
+                    status_text = "⏭ 已签到"
+                else:
+                    status_text = "❌ 失败"
+                md += f"| {username} | {status_text} | {detail} |\n"
+
+    with open(step_summary, "a", encoding="utf-8") as f:
+        f.write(md)
+    print(f"Markdown 摘要已写入 GITHUB_STEP_SUMMARY")

@@ -14,110 +14,39 @@ jobs:
       fail-fast: false
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Create accounts file from secret
-        env:
+      - run: pip install -r requirements.txt
+      - env:
           ACCOUNTS_DATA: ${{ secrets.ACCOUNTS_DATA }}
-        run: |
-          echo "$ACCOUNTS_DATA" > "DTony API.txt"
-
-      - name: Run check-in script (batch ${{ matrix.batch }})
-        env:
+        run: echo "$ACCOUNTS_DATA" > "DTony API.txt"
+      - env:
           NEW_API_BASE_URL: ${{ secrets.NEW_API_BASE_URL }}
           BATCH_TOTAL: 7
           BATCH_INDEX: ${{ matrix.batch }}
         run: python checkin.py
-
-      - name: Upload check-in report
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: checkin-report-${{ matrix.batch }}
-          path: checkin_result.html
+          path: checkin_report_${{ matrix.batch }}.html
           overwrite: true
 
   summary:
     needs: [checkin]
-    runs-on: ubuntu-latest
     if: always()
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Download all batch reports
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           pattern: checkin-report-*
           merge-multiple: true
-
-      - name: Generate summary HTML
-        run: |
-          python3 << 'PYEOF'
-          import os, re, html as html_mod
-
-          files = sorted([f for f in os.listdir(".") if f.endswith(".html")])
-
-          all_rows = ""
-          total_success = 0
-          total_skipped = 0
-          total_failed = 0
-          total_all = 0
-
-          for fname in files:
-              content = open(fname, "r", encoding="utf-8").read()
-              rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
-              for row in rows:
-                  cols = re.findall(r"<td>(.*?)</td>", row)
-                  if len(cols) >= 3:
-                      username, badge, detail = cols[0], cols[1], cols[2]
-                      all_rows += f"<tr><td>{username}</td><td>{badge}</td><td>{detail}</td></tr>\n"
-                      if "成功" in badge:
-                          total_success += 1
-                      elif "已签到" in badge:
-                          total_skipped += 1
-                      elif "限流" in badge:
-                          total_failed += 1
-                      else:
-                          total_failed += 1
-                  total_all += 1
-
-          summary_html = f"""<!DOCTYPE html>
-<html lang="zh">
-<head><meta charset="utf-8"><title>New API 签到汇总报告</title></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;margin:20px">
-<div style="max-width:900px;margin:auto;background:white;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.1)">
-<h2 style="margin-top:0">New API 签到汇总报告</h2>
-<p style="color:#666;font-size:14px">生成时间: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-<div style="display:flex;gap:16px;margin:20px 0">
-  <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#16a34a">{total_success}</div><div style="font-size:12px;color:#666">签到成功</div></div>
-  <div style="flex:1;background:#eff6ff;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#2563eb">{total_skipped}</div><div style="font-size:12px;color:#666">今日已签到</div></div>
-  <div style="flex:1;background:#fef2f2;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#dc2626">{total_failed}</div><div style="font-size:12px;color:#666">失败/限流</div></div>
-  <div style="flex:1;background:#fafafa;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#525252">{total_all}</div><div style="font-size:12px;color:#666">总计</div></div>
-</div>
-<table style="width:100%;border-collapse:collapse;font-size:13px">
-<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">状态</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">详情</th></tr></thead>
-<tbody>{all_rows}</tbody>
-</table>
-</div></body></html>"""
-
-          with open("checkin-summary.html", "w", encoding="utf-8") as f:
-              f.write(summary_html)
-          print(f"汇总完成: {total_success} 成功, {total_skipped} 已签到, {total_failed} 失败, 共 {total_all} 账号")
-          PYEOF
-
-      - name: Upload summary report
-        uses: actions/upload-artifact@v4
+      - run: python3 merge_reports.py
+      - uses: actions/upload-artifact@v4
         with:
           name: checkin-summary
-          path: checkin-summary.html
+          path: checkin_summary.html
           overwrite: true

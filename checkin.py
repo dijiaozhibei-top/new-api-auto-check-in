@@ -13,6 +13,13 @@ BATCH_INDEX = int(os.environ.get("BATCH_INDEX") or "0")
 TIMEOUT = (3, 5)
 DELAY = 3
 
+
+def fmt_q(n):
+    if n is None:
+        return ""
+    return f"{n / 500000:.2f}"
+
+
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
@@ -67,6 +74,37 @@ def get_json(session, url, headers=None):
     return session.get(url, headers=h, timeout=TIMEOUT)
 
 
+def get_or_create_api_key(session, uid, username):
+    headers = {"New-API-User": str(uid)}
+    try:
+        r = session.get(f"{BASE_URL}/api/token/", headers=headers, timeout=TIMEOUT)
+        data = r.json() if r.text.strip() else {}
+        if data.get("success"):
+            for item in data.get("data", {}).get("items", []):
+                if item.get("name") == username:
+                    return item["key"]
+        r2 = session.post(
+            f"{BASE_URL}/api/token/",
+            json={
+                "name": username,
+                "unlimited_quota": True,
+                "remain_quota": 0,
+                "expired_time": -1,
+            },
+            headers={**headers, "Content-Type": "application/json"},
+            timeout=TIMEOUT,
+        )
+        if r2.json().get("success"):
+            r3 = session.get(f"{BASE_URL}/api/token/", headers=headers, timeout=TIMEOUT)
+            d3 = r3.json() if r3.text.strip() else {}
+            for item in d3.get("data", {}).get("items", []):
+                if item.get("name") == username:
+                    return item["key"]
+    except Exception:
+        pass
+    return None
+
+
 def main():
     print("=" * 60)
     print("New API 自动签到工具")
@@ -100,6 +138,8 @@ def main():
         msg = ""
         awarded = None
         quota_after = None
+        api_key = None
+        uid = None
 
         try:
             resp = post_json(
@@ -176,7 +216,15 @@ def main():
         except Exception as e:
             msg = f"{type(e).__name__}: {str(e)[:80]}"
 
-        result = {"username": username, "status": status, "msg": msg}
+        if uid:
+            api_key = get_or_create_api_key(session, uid, username)
+
+        result = {
+            "username": username,
+            "status": status,
+            "msg": msg,
+            "api_key": api_key,
+        }
         if awarded is not None:
             result["awarded"] = awarded
         if quota_after is not None:
@@ -187,11 +235,11 @@ def main():
 
         if status == "success":
             print(
-                f"  [OK]   [{idx}/{total}] {username}: 签到成功 +{awarded}，当前 {quota_after}"
+                f"  [OK]   [{idx}/{total}] {username}: 签到成功 +{fmt_q(awarded)}，当前 {fmt_q(quota_after)}"
             )
             success_count += 1
         elif status == "already_checked_in":
-            q = f"，当前 {quota_after}" if quota_after else ""
+            q = f"，当前 {fmt_q(quota_after)}" if quota_after else ""
             print(f"  [SKIP] [{idx}/{total}] {username}: 今日已签到{q}")
             already_checked += 1
         else:
@@ -206,16 +254,47 @@ def main():
     print(f"  总计: {total}")
     print(f"{'=' * 60}")
 
+    print(f"\n{'=' * 60}")
+    print("结果明细:")
+    print(f"{'=' * 60}")
+    print(f"{'账号':<20} {'状态':<12} {'详情'}")
+    print(f"{'-' * 20} {'-' * 12} {'-' * 30}")
+    for r in results:
+        u, st = r["username"], r["status"]
+        if st == "success":
+            st_label = "成功"
+            detail = f"+{fmt_q(r['awarded'])}, 当前 {fmt_q(r['quota'])}"
+        elif st == "already_checked_in":
+            st_label = "已签到"
+            detail = f"当前 {fmt_q(r['quota'])}" if r.get("quota") else ""
+        elif st == "rate_limited":
+            st_label = "限流跳过"
+            detail = r.get("msg", "")
+        else:
+            st_label = "失败"
+            detail = r.get("msg", "")
+        print(f"{u:<20} {st_label:<12} {detail}")
+    print(f"{'=' * 60}")
+
+    api_keys = [(r["username"], r["api_key"]) for r in results if r.get("api_key")]
+
+    if api_keys:
+        print(f"\nAPI Key 列表（共 {len(api_keys)} 个）:")
+        print(f"{'=' * 60}")
+        for n, k in api_keys:
+            print(f"  {n:<20} {k}")
+        print(f"{'=' * 60}")
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rows = ""
     for r in results:
         u, st = r["username"], r["status"]
         if st == "success":
             badge = '<span style="background:#22c55e;color:white;padding:2px 8px;border-radius:4px;font-size:12px">成功</span>'
-            detail = f"签到 +{r['awarded']}，当前 {r['quota']}"
+            detail = f"签到 +{fmt_q(r['awarded'])}，当前 {fmt_q(r['quota'])}"
         elif st == "already_checked_in":
             badge = '<span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:12px">已签到</span>'
-            detail = f"当前额度 {r['quota']}" if r.get("quota") else ""
+            detail = f"当前额度 {fmt_q(r['quota'])}" if r.get("quota") else ""
         elif st == "rate_limited":
             badge = '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:12px">限流跳过</span>'
             detail = r.get("msg", "")
@@ -241,11 +320,50 @@ def main():
 <thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">状态</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">详情</th></tr></thead>
 <tbody>{rows}</tbody>
 </table>
+<br>
+<h3 style="margin-bottom:8px">API Key 列表（共 {len(api_keys)} 个）</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;word-break:break-all">
+<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
+<tbody>
+{"".join(f'<tr><td>{n}</td><td style="font-family:monospace">{k}</td></tr>\n' for n, k in api_keys)}
+</tbody>
+</table>
 </div></body></html>"""
 
-    with open("checkin_result.html", "w", encoding="utf-8") as f:
+    out_name = f"checkin_report_{BATCH_INDEX}.html"
+    with open(out_name, "w", encoding="utf-8") as f:
         f.write(html)
-    print("详细报告已保存至: checkin_result.html")
+    print(f"报告已保存至: {out_name}")
+
+    step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if step_summary:
+        md = f"""## New API 签到报告 - 批次 {BATCH_INDEX + 1}
+
+| 成功 | 已签到 | 失败 | 总计 |
+|------|--------|------|------|
+| {success_count} | {already_checked} | {fail_count} | {total} |
+
+| 账号 | 状态 | 详情 |
+|------|------|------|
+"""
+        for r in results:
+            u, st = r["username"], r["status"]
+            if st == "success":
+                st_icon = "✅ 成功"
+                detail = f"+{fmt_q(r['awarded'])}, 当前 {fmt_q(r['quota'])}"
+            elif st == "already_checked_in":
+                st_icon = "⏭ 已签到"
+                detail = f"当前 {fmt_q(r['quota'])}" if r.get("quota") else ""
+            elif st == "rate_limited":
+                st_icon = "⚠️ 限流"
+                detail = r.get("msg", "")
+            else:
+                st_icon = "❌ 失败"
+                detail = r.get("msg", "")
+            md += f"| {u} | {st_icon} | {detail} |\n"
+        with open(step_summary, "a", encoding="utf-8") as f:
+            f.write(md)
+        print(f"批次摘要已写入 GITHUB_STEP_SUMMARY")
 
     sys.exit(0)
 
