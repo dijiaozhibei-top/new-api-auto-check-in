@@ -301,12 +301,13 @@ def main():
         else:
             badge = '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:4px;font-size:12px">失败</span>'
             detail = r.get("msg", "")
-        rows += f"<tr><td>{u}</td><td>{badge}</td><td>{detail}</td></tr>\n"
-
-    api_key_rows = "".join(
-        f'<tr><td>{n}</td><td style="font-family:monospace">{k}</td></tr>{chr(10)}'
-        for n, k in api_keys
-    )
+        ak = r.get("api_key", "") or ""
+        ak_display = (
+            f'<code style="font-size:11px;word-break:break-all">{ak}</code>'
+            if ak
+            else ""
+        )
+        rows += f"<tr><td>{u}</td><td>{badge}</td><td>{detail}</td><td>{ak_display}</td></tr>\n"
     html = f"""<!DOCTYPE html>
 <html lang="zh">
 <head><meta charset="utf-8"><title>New API 签到报告</title></head>
@@ -320,17 +321,10 @@ def main():
   <div style="flex:1;background:#fef2f2;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#dc2626">{fail_count}</div><div style="font-size:12px;color:#666">失败</div></div>
   <div style="flex:1;background:#fafafa;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#525252">{total}</div><div style="font-size:12px;color:#666">总计</div></div>
 </div>
-<table style="width:100%;border-collapse:collapse;font-size:13px">
-<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">状态</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">详情</th></tr></thead>
+<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+<colgroup><col style="width:22%"><col style="width:12%"><col style="width:26%"><col style="width:40%"></colgroup>
+<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">状态</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">详情</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
 <tbody>{rows}</tbody>
-</table>
-<br>
-<h3 style="margin-bottom:8px">API Key 列表（共 {len(api_keys)} 个）</h3>
-<table style="width:100%;border-collapse:collapse;font-size:13px;word-break:break-all">
-<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
-<tbody>
-{api_key_rows}
-</tbody>
 </table>
 </div></body></html>"""
 

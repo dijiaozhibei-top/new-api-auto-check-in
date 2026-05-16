@@ -4,7 +4,6 @@ from datetime import datetime
 files = sorted(glob.glob("checkin_report_*.html") + glob.glob("checkin_result.html"))
 
 all_rows = ""
-api_key_rows = ""
 total_success = 0
 total_skipped = 0
 total_failed = 0
@@ -15,11 +14,9 @@ for fname in files:
     rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
     for row in rows:
         cols = re.findall(r"<td[^>]*>(.*?)</td>", row)
-        if len(cols) >= 3:
-            username, badge, detail = cols[0], cols[1], cols[2]
-            all_rows += (
-                f"<tr><td>{username}</td><td>{badge}</td><td>{detail}</td></tr>\n"
-            )
+        if len(cols) >= 4:
+            username, badge, detail, apikey = cols[0], cols[1], cols[2], cols[3]
+            all_rows += f"<tr><td>{username}</td><td>{badge}</td><td>{detail}</td><td>{apikey}</td></tr>\n"
             if "22c55e" in badge:
                 total_success += 1
             elif "3b82f6" in badge:
@@ -27,9 +24,6 @@ for fname in files:
             else:
                 total_failed += 1
             total_all += 1
-        elif len(cols) == 2:
-            username, apikey = cols[0], cols[1]
-            api_key_rows += f'<tr><td>{username}</td><td style="font-family:monospace">{apikey}</td></tr>\n'
 
 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -37,7 +31,6 @@ SUCCESS = total_success
 SKIPPED = total_skipped
 FAILED = total_failed
 TOTAL = total_all
-API_COUNT = api_key_rows.count("<tr>")
 
 html = f"""<!DOCTYPE html>
 <html lang="zh">
@@ -52,15 +45,10 @@ html = f"""<!DOCTYPE html>
   <div style="flex:1;background:#fef2f2;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#dc2626">{FAILED}</div><div style="font-size:12px;color:#666">Failed / Rate Limited</div></div>
   <div style="flex:1;background:#fafafa;border-radius:8px;padding:16px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#525252">{TOTAL}</div><div style="font-size:12px;color:#666">Total</div></div>
 </div>
-<table style="width:100%;border-collapse:collapse;font-size:13px">
-<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Account</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Status</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Detail</th></tr></thead>
+<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+<colgroup><col style="width:22%"><col style="width:12%"><col style="width:26%"><col style="width:40%"></colgroup>
+<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Account</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Status</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Detail</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
 <tbody>{all_rows}</tbody>
-</table>
-<br>
-<h3 style="margin-bottom:8px">API Key 列表（共 {API_COUNT} 个）</h3>
-<table style="width:100%;border-collapse:collapse;font-size:13px;word-break:break-all">
-<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Account</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
-<tbody>{api_key_rows}</tbody>
 </table>
 </div></body></html>"""
 
@@ -70,7 +58,6 @@ with open("checkin_summary.html", "w", encoding="utf-8") as f:
 print(f"\n{'=' * 60}")
 print("汇总报告")
 print(f"  成功: {SUCCESS}  已签到: {SKIPPED}  失败: {FAILED}  总计: {TOTAL}")
-print(f"  API Key: {API_COUNT} 个")
 print(f"  时间: {now}")
 print(f"{'=' * 60}")
 
@@ -82,34 +69,29 @@ if step_summary:
 |------|--------|------|------|
 | {SUCCESS} | {SKIPPED} | {FAILED} | {TOTAL} |
 
-| 账号 | 状态 | 详情 |
-|------|------|------|
+| 账号 | 状态 | 详情 | API Key |
+|------|------|------|---------|
 """
     for fname in files:
         content = open(fname, "r", encoding="utf-8").read()
         rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
         for row in rows:
             cols = re.findall(r"<td[^>]*>(.*?)</td>", row)
-            if len(cols) >= 3:
-                username, badge_html, detail = cols[0], cols[1], cols[2]
+            if len(cols) >= 4:
+                username, badge_html, detail, apikey_html = (
+                    cols[0],
+                    cols[1],
+                    cols[2],
+                    cols[3],
+                )
                 if "22c55e" in badge_html:
                     status_text = "✅ 成功"
                 elif "3b82f6" in badge_html:
                     status_text = "⏭ 已签到"
                 else:
                     status_text = "❌ 失败"
-                md += f"| {username} | {status_text} | {detail} |\n"
-
-    md += f"\n### API Key 列表（共 {API_COUNT} 个）\n\n| 账号 | API Key |\n|------|--------|\n"
-    for fname in files:
-        content = open(fname, "r", encoding="utf-8").read()
-        rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
-        for row in rows:
-            cols = re.findall(r"<td[^>]*>(.*?)</td>", row)
-            if len(cols) == 2:
-                username, apikey = cols[0], cols[1]
-                apikey_clean = re.sub(r"<[^>]+>", "", apikey)
-                md += f"| {username} | `{apikey_clean}` |\n"
+                apikey_clean = re.sub(r"<[^>]+>", "", apikey_html)
+                md += f"| {username} | {status_text} | {detail} | `{apikey_clean}` |\n"
 
     with open(step_summary, "a", encoding="utf-8") as f:
         f.write(md)
