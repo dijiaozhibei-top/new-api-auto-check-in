@@ -31,8 +31,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: checkin-report-${{ matrix.batch }}
-          path: checkin_report_${{ matrix.batch }}.html
+          path: |
+            checkin_report_${{ matrix.batch }}.html
+            api_keys_${{ matrix.batch }}.txt
           overwrite: true
+          if-no-files-found: warn
 
   summary:
     needs: [checkin]
