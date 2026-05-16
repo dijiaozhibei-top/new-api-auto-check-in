@@ -243,9 +243,10 @@ def main():
 </table>
 </div></body></html>"""
 
-    with open("checkin_result.html", "w", encoding="utf-8") as f:
+    out_name = f"checkin_report_{BATCH_INDEX}.html"
+    with open(out_name, "w", encoding="utf-8") as f:
         f.write(html)
-    print("详细报告已保存至: checkin_result.html")
+    print(f"报告已保存至: {out_name}")
 
     sys.exit(0)
 
