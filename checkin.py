@@ -339,36 +339,6 @@ def main():
         f.write(html)
     print(f"报告已保存至: {out_name}")
 
-    step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if step_summary:
-        md = f"""## New API 签到报告 - 批次 {BATCH_INDEX + 1}
-
-| 成功 | 已签到 | 失败 | 总计 |
-|------|--------|------|------|
-| {success_count} | {already_checked} | {fail_count} | {total} |
-
-| 账号 | 状态 | 详情 |
-|------|------|------|
-"""
-        for r in results:
-            u, st = r["username"], r["status"]
-            if st == "success":
-                st_icon = "✅ 成功"
-                detail = f"+{fmt_q(r['awarded'])}, 当前 {fmt_q(r['quota'])}"
-            elif st == "already_checked_in":
-                st_icon = "⏭ 已签到"
-                detail = f"当前 {fmt_q(r['quota'])}" if r.get("quota") else ""
-            elif st == "rate_limited":
-                st_icon = "⚠️ 限流"
-                detail = r.get("msg", "")
-            else:
-                st_icon = "❌ 失败"
-                detail = r.get("msg", "")
-            md += f"| {u} | {st_icon} | {detail} |\n"
-        with open(step_summary, "a", encoding="utf-8") as f:
-            f.write(md)
-        print(f"批次摘要已写入 GITHUB_STEP_SUMMARY")
-
     sys.exit(0)
 
 
