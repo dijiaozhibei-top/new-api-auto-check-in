@@ -255,12 +255,6 @@ def main():
     print(f"{'=' * 60}")
 
     api_keys = [(r["username"], r["api_key"]) for r in results if r.get("api_key")]
-    if api_keys:
-        apifile = f"api_keys_{BATCH_INDEX}.txt"
-        with open(apifile, "w", encoding="utf-8") as f:
-            for name, key in api_keys:
-                f.write(f"{name},{key}\n")
-        print(f"API Key 已保存至 {apifile}，共 {len(api_keys)} 个")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rows = ""
@@ -296,6 +290,14 @@ def main():
 <table style="width:100%;border-collapse:collapse;font-size:13px">
 <thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">状态</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">详情</th></tr></thead>
 <tbody>{rows}</tbody>
+</table>
+<br>
+<h3 style="margin-bottom:8px">API Key 列表（共 {len(api_keys)} 个）</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;word-break:break-all">
+<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">账号</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
+<tbody>
+{"".join(f'<tr><td>{n}</td><td style="font-family:monospace">{k}</td></tr>\n' for n, k in api_keys)}
+</tbody>
 </table>
 </div></body></html>"""
 
