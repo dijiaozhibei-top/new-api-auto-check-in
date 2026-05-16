@@ -55,7 +55,6 @@ html = f"""<!DOCTYPE html>
 
 with open("checkin_summary.html", "w", encoding="utf-8") as f:
     f.write(html)
-<<<<<<< HEAD
 
 # ── text summary to stdout ──
 print(f"\n{'=' * 60}")
@@ -94,6 +93,3 @@ if step_summary:
     with open(step_summary, "a", encoding="utf-8") as f:
         f.write(md)
     print(f"Markdown 摘要已写入 GITHUB_STEP_SUMMARY")
-=======
-print(f"Summary: {SUCCESS} success, {SKIPPED} skipped, {FAILED} failed, total {TOTAL}")
->>>>>>> da3e0f309c019f5b5fc5801d76f8ed4b595d0cd2
