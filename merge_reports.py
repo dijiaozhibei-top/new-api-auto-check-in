@@ -4,6 +4,7 @@ from datetime import datetime
 files = sorted(glob.glob("checkin_report_*.html") + glob.glob("checkin_result.html"))
 
 all_rows = ""
+api_key_rows = ""
 total_success = 0
 total_skipped = 0
 total_failed = 0
@@ -25,7 +26,10 @@ for fname in files:
                 total_skipped += 1
             else:
                 total_failed += 1
-        total_all += 1
+            total_all += 1
+        elif len(cols) == 2:
+            username, apikey = cols[0], cols[1]
+            api_key_rows += f'<tr><td>{username}</td><td style="font-family:monospace">{apikey}</td></tr>\n'
 
 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -33,6 +37,7 @@ SUCCESS = total_success
 SKIPPED = total_skipped
 FAILED = total_failed
 TOTAL = total_all
+API_COUNT = api_key_rows.count("<tr>")
 
 html = f"""<!DOCTYPE html>
 <html lang="zh">
@@ -51,19 +56,24 @@ html = f"""<!DOCTYPE html>
 <thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Account</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Status</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Detail</th></tr></thead>
 <tbody>{all_rows}</tbody>
 </table>
+<br>
+<h3 style="margin-bottom:8px">API Key 列表（共 {API_COUNT} 个）</h3>
+<table style="width:100%;border-collapse:collapse;font-size:13px;word-break:break-all">
+<thead><tr style="background:#fafafa"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">Account</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e5e5e5">API Key</th></tr></thead>
+<tbody>{api_key_rows}</tbody>
+</table>
 </div></body></html>"""
 
 with open("checkin_summary.html", "w", encoding="utf-8") as f:
     f.write(html)
 
-# ── text summary to stdout ──
 print(f"\n{'=' * 60}")
 print("汇总报告")
 print(f"  成功: {SUCCESS}  已签到: {SKIPPED}  失败: {FAILED}  总计: {TOTAL}")
+print(f"  API Key: {API_COUNT} 个")
 print(f"  时间: {now}")
 print(f"{'=' * 60}")
 
-# ── markdown to GITHUB_STEP_SUMMARY ──
 step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
 if step_summary:
     md = f"""## New API 签到汇总报告
@@ -89,6 +99,17 @@ if step_summary:
                 else:
                     status_text = "❌ 失败"
                 md += f"| {username} | {status_text} | {detail} |\n"
+
+    md += f"\n### API Key 列表（共 {API_COUNT} 个）\n\n| 账号 | API Key |\n|------|--------|\n"
+    for fname in files:
+        content = open(fname, "r", encoding="utf-8").read()
+        rows = re.findall(r"<tr>(.*?)</tr>", content, re.DOTALL)
+        for row in rows:
+            cols = re.findall(r"<td>(.*?)</td>", row)
+            if len(cols) == 2:
+                username, apikey = cols[0], cols[1]
+                apikey_clean = re.sub(r"<[^>]+>", "", apikey)
+                md += f"| {username} | `{apikey_clean}` |\n"
 
     with open(step_summary, "a", encoding="utf-8") as f:
         f.write(md)
