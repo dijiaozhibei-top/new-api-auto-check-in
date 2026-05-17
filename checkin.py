@@ -7,6 +7,12 @@ from datetime import datetime
 
 
 BASE_URL = os.environ.get("NEW_API_BASE_URL") or "https://ai.dtony.org"
+
+
+def mask(u):
+    return f"{u[:3]}***{u[-3:]}" if len(u) > 8 else u[:3]
+
+
 ACCOUNTS_FILE = os.environ.get("ACCOUNTS_FILE") or "DTony API.txt"
 BATCH_TOTAL = int(os.environ.get("BATCH_TOTAL") or "1")
 BATCH_INDEX = int(os.environ.get("BATCH_INDEX") or "0")
@@ -160,7 +166,7 @@ def main():
             )
             if resp.status_code == 429:
                 print(
-                    f"  [STOP] [{idx}/{total}] {username}: 达到每日登录上限（429），跳过剩下的账号"
+                    f"  [STOP] [{idx}/{total}] {mask(username)}: 达到每日登录上限（429），跳过剩下的账号"
                 )
                 remaining = total - idx + 1
                 fail_count += remaining
@@ -246,15 +252,15 @@ def main():
 
         if status == "success":
             print(
-                f"  [OK]   [{idx}/{total}] {username}: 签到成功 +{fmt_q(awarded)}，当前 {fmt_q(quota_after)}"
+                f"  [OK]   [{idx}/{total}] {mask(username)}: 签到成功 +{fmt_q(awarded)}，当前 {fmt_q(quota_after)}"
             )
             success_count += 1
         elif status == "already_checked_in":
             q = f"，当前 {fmt_q(quota_after)}" if quota_after else ""
-            print(f"  [SKIP] [{idx}/{total}] {username}: 今日已签到{q}")
+            print(f"  [SKIP] [{idx}/{total}] {mask(username)}: 今日已签到{q}")
             already_checked += 1
         else:
-            print(f"  [FAIL] [{idx}/{total}] {username}: {msg}")
+            print(f"  [FAIL] [{idx}/{total}] {mask(username)}: {msg}")
             fail_count += 1
 
     print(f"\n{'=' * 60}")
@@ -284,7 +290,7 @@ def main():
         else:
             st_label = "失败"
             detail = r.get("msg", "")
-        print(f"{u:<20} {st_label:<12} {detail}")
+        print(f"{mask(u):<20} {st_label:<12} {detail}")
     print(f"{'=' * 60}")
 
     api_keys = [(r["username"], r["api_key"]) for r in results if r.get("api_key")]
@@ -293,7 +299,7 @@ def main():
         print(f"\nAPI Key 列表（共 {len(api_keys)} 个）:")
         print(f"{'=' * 60}")
         for n, k in api_keys:
-            print(f"  {n:<20} {k}")
+            print(f"  {mask(n):<20} {k}")
         print(f"{'=' * 60}")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
